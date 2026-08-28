@@ -95,9 +95,9 @@ public class RuinedCity
 		int base = groundY(world, center.X, center.Z);
 		if (base <= 0)
 			base = 64;
-		// edge transition: an 8-wide band around the plain fades back to the
-		// natural terrain, so the city merges into the wastes without a cliff
-		int blend = 8;
+		// edge transition: a fade band around the plain merges the city into
+		// the wastes without a cliff (12 blocks; larger blends swallow big relief)
+		int blend = 12;
 		System.out.println("City flatten: base=" + base + " blend=" + blend);
 		for (int x = minX - blend; x <= maxX + blend; x++)
 		{
