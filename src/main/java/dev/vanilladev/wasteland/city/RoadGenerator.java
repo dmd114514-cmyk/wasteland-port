@@ -12,18 +12,20 @@ import net.minecraft.world.World;
 // built; generate(from) then lays the main link to the nearest city (lane
 // offset outside both city cores, so the road never cuts a city plain) plus a
 // long dead-end stretch. The deck height starts at the source city ground and
-// each column reads the terrain: gentle up-and-down is laid on the ground (the
-// road keeps the relief, not a monotone flat deck), deep dips are bridged
-// (3x3 twin pillars every 5 blocks), steep hills (>= 6 above the deck) are
-// tunnelled straight through - a 4-block polished-andesite wall on each side
-// and an elliptical arch over the passage, like a real highway tunnel.
+// stays flat from end to end - zero relief, the road never climbs: any ground
+// above the deck is tunnelled straight through (4-block polished-andesite
+// walls + an elliptical arch, like a real highway tunnel), any ground below
+// is bridged (3x3 twin pillars every 5 blocks), only exact-level ground is
+// laid directly. Both ends of the road are ragged broken-off stumps: lanes
+// are randomly eaten away and the remains become debris (gravel / cobble /
+// stone / concrete chunks), the very end is a rubble heap.
 public class RoadGenerator
 {
 	private static final int AXIS_X = 0;
 	private static final int AXIS_Z = 1;
 	private static final int PARALLEL_MIN = 160; // 10 chunks same-axis spacing
 	private static final int CITY_RADIUS = 80;   // city core half width + margin
-	private static final int SLOPE_MAX = 5;      // gentle relief band above the deck
+	private static final int BROKEN_TAIL = 10;   // broken-off length at each road end
 	private static final int TUNNEL_H = 4;       // wall height above the deck
 
 	private static final List<BlockPos> cities = new ArrayList<BlockPos>();
@@ -103,9 +105,10 @@ public class RoadGenerator
 		return true;
 	}
 
-	// walk the road; the deck starts at the source city ground and every column
-	// decides itself: gentle ground -> lay on it (relief kept), deep dip ->
-	// bridge at deck height, steep hill -> tunnel. Piles per-road stats.
+	// walk the road; the deck starts at the source city ground and stays flat:
+	// every column reads the terrain - ground above the deck -> tunnel, ground
+	// below -> bridge at deck height, exact level -> laid directly. Both ends
+	// (BROKEN_TAIL columns) are broken-off stumps instead of a clean cut.
 	private static void pave(World world, Random random, boolean alongX, int lane, int a0, int a1)
 	{
 		int base = groundY(world, alongX ? a0 : lane, alongX ? lane : a0);
@@ -116,7 +119,8 @@ public class RoadGenerator
 		{
 			int x = alongX ? a : lane;
 			int z = alongX ? lane : a;
-			int type = paveColumn(world, random, x, z, base, alongX);
+			int distEnd = Math.min(a - a0, a1 - a);
+			int type = paveColumn(world, random, x, z, base, alongX, distEnd);
 			cols++;
 			if (type == 1)
 			{
@@ -154,8 +158,8 @@ public class RoadGenerator
 		}
 	}
 
-	// one column; 0 = on ground (relief kept), 1 = bridge, 2 = tunnel
-	private static int paveColumn(World world, Random random, int x, int z, int base, boolean alongX)
+	// one column; 0 = laid directly (or a broken-off end), 1 = bridge, 2 = tunnel
+	private static int paveColumn(World world, Random random, int x, int z, int base, boolean alongX, int distEnd)
 	{
 		int gy = groundY(world, x, z);
 		if (gy <= 0)
@@ -163,18 +167,67 @@ public class RoadGenerator
 		int ground = gy - 1; // surface block level
 		if (ground < base)
 		{
-			// any ground lower than the deck: bridge directly
+			// any ground below the deck: bridge directly
 			paveSurface(world, random, x, z, base, 0, alongX);
 			return 1;
 		}
-		if (ground > base + SLOPE_MAX)
+		if (ground > base)
 		{
-			// steep hill: no climbing, tunnel straight through
+			// anything above the deck: no climbing, tunnel straight through
 			paveTunnel(world, random, x, z, base, alongX);
 			return 2;
 		}
-		paveSurface(world, random, x, z, ground, 0, alongX); // gentle relief: lay on it
+		// exact-level ground: laid directly; the ends break off instead
+		if (distEnd < BROKEN_TAIL)
+			paveBrokenEnd(world, random, x, z, base, alongX, distEnd);
+		else
+			paveSurface(world, random, x, z, base, 0, alongX);
 		return 0;
+	}
+
+	// broken-off road end: the foundation mostly stays but lanes are randomly
+	// eaten away (survival chance rises from ~0 at the very end to full at the
+	// tail edge) and the broken cells become debris; the end is a rubble heap
+	private static void paveBrokenEnd(World world, Random random, int x, int z, int y, boolean alongX, int distEnd)
+	{
+		for (int dx = -5; dx <= 5; dx++)
+		{
+			int px = alongX ? x : x + dx;
+			int pz = alongX ? z + dx : z;
+			if (random.nextInt(10) == 0)
+				world.setBlockToAir(new BlockPos(px, y - 1, pz)); // foundation crack
+			else
+				world.setBlockState(new BlockPos(px, y - 1, pz), Blocks.STONE.getStateFromMeta(6));
+		}
+		double p = (distEnd + 1.0) / BROKEN_TAIL;
+		for (int dx = -5; dx <= 5; dx++)
+		{
+			int px = alongX ? x : x + dx;
+			int pz = alongX ? z + dx : z;
+			boolean keep = random.nextDouble() < p; // lane survives with rising chance
+			if (keep && random.nextInt(5) != 0)
+			{
+				int lane = Math.abs(dx);
+				int meta = (lane == 5 || lane == 0) && random.nextInt(3) != 0 ? 0 : 15;
+				world.setBlockState(new BlockPos(px, y, pz), Blocks.CONCRETE.getStateFromMeta(meta));
+			}
+			else
+				setDebris(world, random, px, y, pz);
+		}
+	}
+
+	private static void setDebris(World world, Random random, int x, int y, int z)
+	{
+		BlockPos p = new BlockPos(x, y, z);
+		int r = random.nextInt(10);
+		if (r < 4)
+			world.setBlockState(p, Blocks.GRAVEL.getDefaultState());
+		else if (r < 7)
+			world.setBlockState(p, Blocks.COBBLESTONE.getDefaultState());
+		else if (r < 9)
+			world.setBlockState(p, Blocks.STONE.getDefaultState());
+		else
+			world.setBlockState(p, Blocks.CONCRETE.getStateFromMeta(random.nextInt(16)));
 	}
 
 	// elliptical tunnel: 4-block walls at +-6 and an arch roof, the passage and
