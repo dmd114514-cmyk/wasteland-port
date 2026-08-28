@@ -36,6 +36,7 @@ public class RuinedCity
 	private static final int HBM_HOUSE2 = 1004;   // CivilianFeatures$NTMHouse2 (15x5)
 	private static final int HBM_LAB2 = 1005;     // CivilianFeatures$NTMLab2 (12x11)
 	private static final int HBM_RURAL = 1006;    // CivilianFeatures$RuralHouse1 (14x8)
+	private static final int HBM_RUIN1 = 1007;    // dungeon.Ruin001 (12x14, WorldGenerator)
 	private static final boolean HBM = Loader.isModLoaded("hbm");
 
 	private final Vector center;
@@ -45,7 +46,7 @@ public class RuinedCity
 	// footprints taken by buildings (inflated by 1 block for spacing)
 	private final java.util.HashSet<Long> occupied = new java.util.HashSet<Long>();
 	// HBM per-type counter so no linked building repeats more than 3 times
-	private final int[] hbmCount = new int[7];
+	private final int[] hbmCount = new int[8];
 	// temp diagnostics (removed for release)
 	private int blocksSeen, biomeFail, groundFail, createFail, placedBuildings, hbmBuildings;
 
@@ -199,7 +200,7 @@ public class RuinedCity
 	// touch an already-placed building are skipped (nothing overlaps or sticks).
 	private boolean placeBuilding(World world, Random random, int type, int x, int z, boolean groundSnap)
 	{
-		if (type >= HBM_HOUSE && type <= HBM_RURAL)
+		if (type >= HBM_HOUSE && type <= HBM_RUIN1)
 			return placeHbmBuilding(world, random, type, x, z, groundSnap);
 		Building b = Building.create(type);
 		if (b == null)
@@ -281,8 +282,25 @@ public class RuinedCity
 	{
 		if (!HBM)
 			return false;
-		int w = (type == HBM_HOUSE) ? 9 : 14;
-		int l = (type == HBM_HOUSE) ? 4 : 5;
+		int w, l;
+		String cls;
+		switch (type)
+		{
+			case HBM_HOUSE:    w = 9;  l = 4;  cls = "com.hbm.world.gen.component.CivilianFeatures$NTMHouse1"; break;
+			case HBM_LAB1:     w = 9;  l = 4;  cls = "com.hbm.world.gen.component.CivilianFeatures$NTMLab1"; break;
+			case HBM_OFFICE:   w = 14; l = 5;  cls = "com.hbm.world.gen.component.OfficeFeatures$LargeOffice"; break;
+			case HBM_OFFICE_C: w = 11; l = 15; cls = "com.hbm.world.gen.component.OfficeFeatures$LargeOfficeCorner"; break;
+			case HBM_HOUSE2:   w = 15; l = 5;  cls = "com.hbm.world.gen.component.CivilianFeatures$NTMHouse2"; break;
+			case HBM_LAB2:     w = 12; l = 11; cls = "com.hbm.world.gen.component.CivilianFeatures$NTMLab2"; break;
+			case HBM_RURAL:    w = 14; l = 8;  cls = "com.hbm.world.gen.component.CivilianFeatures$RuralHouse1"; break;
+			case HBM_RUIN1:    w = 12; l = 14; cls = "com.hbm.world.dungeon.Ruin001"; break;
+			default:
+				return false;
+		}
+		// per-type cap: at most 3 of each linked building per city
+		int idx = type - HBM_HOUSE;
+		if (hbmCount[idx] >= 3)
+			return false;
 		int x0 = groundSnap ? x - w / 2 : x;
 		int z0 = groundSnap ? z - l / 2 : z;
 		// overlap + spacing check (one-block margin, same as the ruins)
@@ -328,18 +346,26 @@ public class RuinedCity
 		}
 		try
 		{
-			String cls = (type == HBM_HOUSE)
-					? "com.hbm.world.gen.component.CivilianFeatures$NTMHouse1"
-					: "com.hbm.world.gen.component.OfficeFeatures$LargeOffice";
 			Class<?> c = Class.forName(cls);
-			Object comp = c.getConstructor(Random.class, int.class, int.class).newInstance(random, x0, z0);
-			// runtime names are srg (StructureComponent): getBoundingBox=func_74874_b,
-			// addComponentParts=func_74875_a
-			Object box = comp.getClass().getMethod("func_74874_b").invoke(comp);
-			comp.getClass().getMethod("func_74875_a", World.class, Random.class,
-					StructureBoundingBox.class).invoke(comp, world, random, box);
+			if (type == HBM_RUIN1)
+			{
+				// Ruin001 is a plain WorldGenerator: no-arg ctor, generate(World,Random,BlockPos)
+				Object gen = c.getConstructor().newInstance();
+				gen.getClass().getMethod("generate", World.class, Random.class,
+						BlockPos.class).invoke(gen, world, random, new BlockPos(x0, maxY - 1, z0));
+			}
+			else
+			{
+				Object comp = c.getConstructor(Random.class, int.class, int.class).newInstance(random, x0, z0);
+				// runtime names are srg (StructureComponent): getBoundingBox=func_74874_b,
+				// addComponentParts=func_74875_a
+				Object box = comp.getClass().getMethod("func_74874_b").invoke(comp);
+				comp.getClass().getMethod("func_74875_a", World.class, Random.class,
+						StructureBoundingBox.class).invoke(comp, world, random, box);
+			}
 			this.placedBuildings++;
 			this.hbmBuildings++;
+			this.hbmCount[idx]++;
 			return true;
 		}
 		catch (Throwable t)
@@ -480,6 +506,8 @@ public class RuinedCity
 			a.add(HBM_LAB2);
 		if (hbmCount[6] < 3)
 			a.add(HBM_RURAL);
+		if (hbmCount[7] < 3)
+			a.add(HBM_RUIN1);
 		return a.isEmpty() ? -1 : a.get(random.nextInt(a.size()));
 	}
 }
