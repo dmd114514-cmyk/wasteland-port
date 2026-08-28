@@ -93,28 +93,36 @@ public class RuinedCity
 		int base = groundY(world, center.X, center.Z);
 		if (base <= 0)
 			base = 64;
-		System.out.println("City flatten: base=" + base);
-		for (int x = minX; x <= maxX; x++)
+		// edge transition: an 8-wide band around the plain fades back to the
+		// natural terrain, so the city merges into the wastes without a cliff
+		int blend = 8;
+		System.out.println("City flatten: base=" + base + " blend=" + blend);
+		for (int x = minX - blend; x <= maxX + blend; x++)
 		{
-			for (int z = minZ; z <= maxZ; z++)
+			for (int z = minZ - blend; z <= maxZ + blend; z++)
 			{
 				int gy = groundY(world, x, z);
 				if (gy <= 0)
 					continue;
-				if (gy > base)
+				int dx = (x < minX) ? minX - x : (x > maxX) ? x - maxX : 0;
+				int dz = (z < minZ) ? minZ - z : (z > maxZ) ? z - maxZ : 0;
+				int dist = (dx > dz) ? dx : dz;
+				int target = base;
+				if (dist > blend)
+					continue; // outside the band - natural terrain untouched
+				else if (dist > 0)
+					target = base + (gy - base) * dist / blend; // fade back to natural
+				if (target > gy)
 				{
-					// cut the high ground down to the plain level
-					for (int y = base; y < gy; y++)
-						world.setBlockToAir(new BlockPos(x, y, z));
-				}
-				else if (gy < base)
-				{
-					// fill the dips up to the plain level
-					for (int y = gy; y < base; y++)
+					for (int y = gy; y < target; y++)
 						world.setBlockState(new BlockPos(x, y, z), Blocks.DIRT.getDefaultState());
 				}
-				// uniform surface so streets/buildings have the same ground
-				world.setBlockState(new BlockPos(x, base - 1, z), ModConfig.getSurfaceBlock().getDefaultState());
+				else if (target < gy)
+				{
+					for (int y = target; y < gy; y++)
+						world.setBlockToAir(new BlockPos(x, y, z));
+				}
+				world.setBlockState(new BlockPos(x, target - 1, z), ModConfig.getSurfaceBlock().getDefaultState());
 			}
 		}
 	}
@@ -302,6 +310,8 @@ public class RuinedCity
 		if (hbmCount[idx] >= 3)
 			return false;
 		int x0 = groundSnap ? x - w / 2 : x;
+		if (type == HBM_RUIN1)
+			x0--; // Ruin001 draws one block to the right of its anchor
 		int z0 = groundSnap ? z - l / 2 : z;
 		// overlap + spacing check (one-block margin, same as the ruins)
 		for (int px = x0 - 1; px < x0 + w + 1; px++)
@@ -399,7 +409,7 @@ public class RuinedCity
 	// small sub-cell buildings
 	private void placeNormalBlock(World world, Random random, int bx, int bz, int cx, int cz)
 	{
-		if (random.nextInt(100) < 15)
+		if (random.nextInt(100) < 25)
 			placeBuilding(world, random, pickLarge(random), cx, cz, true);
 		fillSubCells(world, random, bx, bz, false);
 	}
@@ -410,15 +420,15 @@ public class RuinedCity
 	{
 		Integer[] order = { 0, 1, 2, 3 };
 		Collections.shuffle(Arrays.asList(order), random);
-		int target = central ? (3 + random.nextInt(2)) : (2 + random.nextInt(3));
+		int target = 4; // build in every sub-cell - denser city
 		int placed = 0;
 		for (int i = 0; i < 4 && placed < target; i++)
 		{
 			// sub-cell center: block origin + 4 + col*SUB_W fills the 18-wide
 			// block ([bx,bx+8] and [bx+9,bx+17]); streets stay outside
-			int px = bx + 4 + (order[i] % 2) * SUB_W;
-			int pz = bz + 4 + (order[i] / 2) * SUB_W;
-			if (random.nextInt(100) < (central ? 65 : 55))
+			int px = bx + 4 + (order[i] % 2) * SUB_W + random.nextInt(3) - 1;
+			int pz = bz + 4 + (order[i] / 2) * SUB_W + random.nextInt(3) - 1;
+			if (random.nextInt(100) < (central ? 90 : 85))
 			{
 				if (placeBuilding(world, random, central ? pickMid(random) : pickSmall(random), px, pz, true))
 					placed++;
