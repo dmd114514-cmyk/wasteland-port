@@ -3,7 +3,7 @@
   "modid": "wlm",
   "name": "The Wasteland Mod",
   "description": "Adds a post-apocalyptic Wasteland world type, with ruins, abandoned villages, cities and day zombies. Ported from 1.7.10 to 1.12.2.",
-  "version": "1.0.0",
+  "version": "1.0.0.1",
   "mcversion": "1.12.2",
   "url": "",
   "updateUrl": "",

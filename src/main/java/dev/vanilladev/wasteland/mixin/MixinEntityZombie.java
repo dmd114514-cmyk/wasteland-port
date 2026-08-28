@@ -25,9 +25,10 @@ public abstract class MixinEntityZombie
 		return false;
 	}
 
-	// always spawnable (day and night) - the daytime-only variant needs a
-	// World reference (refmap/srg field), which is not available without it
-	@Inject(method = "func_70652_k", at = @At("HEAD"), cancellable = true)
+	// always spawnable (day and night); func_70814_o is isValidLightLevel in
+	// 1.12 (verified against srg_to_snapshot_20171003-1.12.tsrg - the old
+	// 1.7 name func_70652_k would silently inject a dead method)
+	@Inject(method = "func_70814_o", at = @At("HEAD"), cancellable = true)
 	private void wastelandSpawnAnyTime(CallbackInfoReturnable<Boolean> cir)
 	{
 		cir.setReturnValue(true);
