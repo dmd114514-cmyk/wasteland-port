@@ -8,3 +8,6 @@ logs/
 .idea/
 *.iml
 .vscode/
+
+# internal development notes - not published
+DEVELOPMENT.md
