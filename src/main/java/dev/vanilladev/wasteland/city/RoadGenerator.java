@@ -1,200 +1,152 @@
 package dev.vanilladev.wasteland.city;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Random;
 
 import net.minecraft.init.Blocks;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
+import net.minecraft.world.biome.Biome;
+import dev.vanilladev.wasteland.WastelandBiomes;
+import dev.vanilladev.wasteland.utils.Vector;
 
-// Long decayed highway. The main road (generated first so it always wins the
-// parallel check) connects the new city to the nearest already-generated one
-// (passing two cities); a random long dead-end stretch is added after. Road
-// level is fixed at the starting city ground; any lower ground is bridged
-// directly (no extra conditions), ground >= 6 above is tunnelled (5-high),
-// the rest is laid on the terrain. Surface: black concrete lanes, white edge
-// lines + centre dashes, on a one-block polished-andesite foundation; iron-bar
-// railings raised one block above the deck (on two andesite blocks below);
-// bridge decks get one 3x3 pillar each side (+-5) every 5 blocks down to the
-// ground. No weeds outside the railings.
+// World main highway: one axis-aligned road, 10000 blocks long, through the
+// world center (lane 0). It is paved chunk by chunk during population so a
+// 10000-long road never stalls worldgen. City centers are aligned to sit
+// beside the road (176-275 blocks off the lane, outside the city plain), so
+// cities grow along both sides and the road never cuts through a city plain.
+// Surface: black concrete lanes, white edge lines + centre dashes, on a
+// polished-andesite foundation; iron-bar railings raised one block (two
+// andesite blocks below); ground below the fixed deck is bridged with 3x3
+// twin pillars every 5 blocks down to the ground; hills >= 6 above the deck
+// are tunnelled (5-high passage).
 public class RoadGenerator
 {
-	private static final int AXIS_X = 0;
-	private static final int AXIS_Z = 1;
-	private static final int PARALLEL_MIN = 160; // 10 chunks
-	private static final int CITY_RADIUS = 80;   // city core half width + margin
+	private static final int MAIN_LEN = 5000;   // +-5000 = 10000 blocks
+	private static final int CITY_RADIUS = 80;
+	private static final int DECK_Y = 64;       // fixed deck height
 
-	private static final List<BlockPos> cities = new ArrayList<BlockPos>();
-	private static final List<int[]> placed = new ArrayList<int[]>(); // {axis, coord}
+	private static boolean initialized = false;
+	private static boolean mainAlongX = true;
+	private static int mainLane = 0;
 
-	public static void registerCity(BlockPos c)
+	public static void ensure(Random random)
 	{
-		cities.add(c);
+		if (initialized)
+			return;
+		initialized = true;
+		mainAlongX = random.nextBoolean();
+		mainLane = 0;
+		System.out.println("Road main: " + (mainAlongX ? "x-axis" : "z-axis") + " lane " + mainLane + " from " + (-MAIN_LEN) + " to " + MAIN_LEN);
 	}
 
-	public static void generate(World world, Random random, BlockPos from)
+	// pull a city center to one side of the main road, outside the city plain;
+	// tries further offsets until it lands on wasteland ground for the city
+	public static Vector alignCity(World world, Vector v, Random random)
 	{
-		BlockPos dest = nearestCity(from);
-		if (dest != null)
+		ensure(random);
+		int sideBase = CITY_RADIUS + 96 + random.nextInt(100);
+		for (int attempt = 0; attempt < 6; attempt++)
 		{
-			generateOne(world, random, from, dest); // main road first - it must connect cities
-			System.out.println("Road gen: city " + from.getX() + "," + from.getZ() + " -> " + dest.getX() + "," + dest.getZ());
+			int side = (random.nextBoolean() ? 1 : -1) * (sideBase + attempt * 32);
+			int x = mainAlongX ? v.X : side;
+			int z = mainAlongX ? side : v.Z;
+			if (biomeOk(world, x, z) || attempt == 5)
+				return new Vector(x, v.Y, z);
 		}
-		generateSideRoad(world, random, from); // long dead-end stretch, after the main link
+		return v;
 	}
 
-	private static BlockPos nearestCity(BlockPos from)
+	private static boolean biomeOk(World world, int x, int z)
 	{
-		BlockPos best = null;
-		int bestD = Integer.MAX_VALUE;
-		for (BlockPos c : cities)
+		Biome b = world.getBiome(new BlockPos(x, 0, z));
+		return b == WastelandBiomes.apocalypse || b == WastelandBiomes.city;
+	}
+
+	// pave the part of the main road crossing this chunk (16 columns max)
+	public static void paveChunk(World world, Random random, int chunkX, int chunkZ)
+	{
+		ensure(random);
+		int minX = chunkX * 16, minZ = chunkZ * 16;
+		int maxX = minX + 15, maxZ = minZ + 15;
+		if (mainAlongX)
 		{
-			if (c.equals(from))
-				continue;
-			int dx = c.getX() - from.getX();
-			int dz = c.getZ() - from.getZ();
-			int d = dx * dx + dz * dz;
-			if (d > CITY_RADIUS * CITY_RADIUS && d < bestD)
+			if (mainLane < minZ - 7 || mainLane > maxZ + 7)
+				return;
+			int a0 = Math.max(minX, -MAIN_LEN), a1 = Math.min(maxX, MAIN_LEN);
+			for (int a = a0; a <= a1; a++)
 			{
-				bestD = d;
-				best = c;
+				int type = paveColumn(world, random, a, mainLane);
+				if (type == 1 && Math.floorMod(a, 5) == 0)
+					pillars(world, a, mainLane);
 			}
 		}
-		return best;
-	}
-
-	private static void generateSideRoad(World world, Random random, BlockPos from)
-	{
-		int len = 400 + random.nextInt(401); // long
-		boolean alongX = random.nextBoolean();
-		int coord = alongX ? from.getZ() : from.getX();
-		int lane = coord + (random.nextBoolean() ? 1 : -1) * (CITY_RADIUS + random.nextInt(48));
-		if (!passesParallel(alongX ? AXIS_X : AXIS_Z, lane))
-			return;
-		placed.add(new int[]{ alongX ? AXIS_X : AXIS_Z, lane });
-		System.out.println("Road side: " + (alongX ? "x-axis" : "z-axis") + " lane " + lane + " len " + len);
-		int a0 = alongX ? from.getX() : from.getZ();
-		int a1 = a0 + (random.nextBoolean() ? len : -len);
-		pave(world, random, alongX, lane, Math.min(a0, a1), Math.max(a0, a1));
-	}
-
-	private static void generateOne(World world, Random random, BlockPos from, BlockPos to)
-	{
-		boolean alongX = Math.abs(to.getX() - from.getX()) >= Math.abs(to.getZ() - from.getZ());
-		int axis = alongX ? AXIS_X : AXIS_Z;
-		int base = alongX ? from.getZ() : from.getX();
-		int lane = base + (random.nextBoolean() ? 1 : -1) * (CITY_RADIUS + random.nextInt(48));
-		if (!passesParallel(axis, lane))
-			return;
-		placed.add(new int[]{ axis, lane });
-		int a0 = alongX ? from.getX() : from.getZ();
-		int a1 = alongX ? to.getX() : to.getZ();
-		int pad = 64 + random.nextInt(97); // dead ends both sides
-		pave(world, random, alongX, lane, Math.min(a0, a1) - pad, Math.max(a0, a1) + pad);
-	}
-
-	private static boolean passesParallel(int axis, int coord)
-	{
-		for (int[] r : placed)
-			if (r[0] == axis && Math.abs(r[1] - coord) < PARALLEL_MIN)
-				return false;
-		return true;
-	}
-
-	// walk the road; the deck height is fixed at the starting ground, every
-	// column decides itself: lower ground -> bridge, >= +6 -> tunnel, else lay on ground
-	private static void pave(World world, Random random, boolean alongX, int lane, int a0, int a1)
-	{
-		int base = groundY(world, alongX ? a0 : lane, alongX ? lane : a0);
-		if (base <= 0)
-			base = 64;
-		int cols = 0, bridges = 0, tunnels = 0, pillarSets = 0;
-		for (int a = a0; a <= a1; a++)
+		else
 		{
-			int x = alongX ? a : lane;
-			int z = alongX ? lane : a;
-			int type = paveColumn(world, random, x, z, base, alongX);
-			cols++;
-			if (type == 1)
+			if (mainLane < minX - 7 || mainLane > maxX + 7)
+				return;
+			int a0 = Math.max(minZ, -MAIN_LEN), a1 = Math.min(maxZ, MAIN_LEN);
+			for (int a = a0; a <= a1; a++)
 			{
-				bridges++;
-				// one pillar set (left + right) every 5 blocks of the road
-				if ((a - a0) % 5 == 0)
-				{
-					pillars(world, x, z, base, alongX);
-					pillarSets++;
-				}
+				int type = paveColumn(world, random, mainLane, a);
+				if (type == 1 && Math.floorMod(a, 5) == 0)
+					pillars(world, mainLane, a);
 			}
-			else if (type == 2)
-				tunnels++;
 		}
-		System.out.println("Road paved: cols=" + cols + " bridge=" + bridges + " tunnel=" + tunnels + " pillarSets=" + pillarSets);
 	}
 
-	// one pillar set: two 3x3 pillars at +-5, from the deck down to the ground
-	private static void pillars(World world, int x, int z, int base, boolean alongX)
+	// one 3x3 pillar each side (+-5), from the deck down to the ground
+	private static void pillars(World world, int x, int z)
 	{
 		for (int side = -1; side <= 1; side += 2)
 		{
-			int gy = groundY(world, alongX ? x : x + 5 * side, alongX ? z + 5 * side : z);
+			int px = x + 5 * side; // pillar centre on the lateral axis
+			int gy = groundY(world, px, z);
 			for (int dd = -1; dd <= 1; dd++)
-			{
 				for (int de = -1; de <= 1; de++)
 				{
-					int px = alongX ? x + dd : x + 5 * side;
-					int pz = alongX ? z + 5 * side : z + de;
-					for (int y = base - 1; y > gy - 1; y--)
+					int bx = mainAlongX ? x + dd : px + dd;
+					int bz = mainAlongX ? z + 5 * side + de : z + de;
+					for (int y = DECK_Y - 1; y > gy - 1; y--)
 						if (y > 0)
-							world.setBlockState(new BlockPos(px, y, pz), Blocks.CONCRETE.getStateFromMeta(15));
+							world.setBlockState(new BlockPos(bx, y, bz), Blocks.CONCRETE.getStateFromMeta(15));
 				}
-			}
 		}
 	}
 
-	// one column; 0 = on ground, 1 = bridge, 2 = tunnel
-	private static int paveColumn(World world, Random random, int x, int z, int base, boolean alongX)
+	// one column at the fixed deck; 0 = on ground, 1 = bridge, 2 = tunnel
+	private static int paveColumn(World world, Random random, int x, int z)
 	{
 		int gy = groundY(world, x, z);
 		if (gy <= 0)
 			return 0;
 		int ground = gy - 1; // surface block level
-		if (ground < base)
+		if (ground < DECK_Y)
 		{
-			// any ground lower than the deck: bridge directly
-			paveSurface(world, random, x, z, base, false, alongX);
+			paveSurface(world, random, x, z, DECK_Y, false); // any dip: bridge
 			return 1;
 		}
-		if (ground > base + 5)
+		if (ground > DECK_Y + 5)
 		{
 			// hill >= 6 above the deck: drill a 5-high tunnel
 			int ty = ground - 5;
 			for (int dy = 1; dy <= 4; dy++)
 				for (int dx = -5; dx <= 5; dx++)
-				{
-					int px = alongX ? x : x + dx;
-					int pz = alongX ? z + dx : z;
-					world.setBlockToAir(new BlockPos(px, ty + dy, pz));
-				}
-			paveSurface(world, random, x, z, ty, true, alongX);
+					world.setBlockToAir(new BlockPos(x + dx, ty + dy, z));
+			paveSurface(world, random, x, z, ty, true);
 			return 2;
 		}
-		paveSurface(world, random, x, z, ground, false, alongX);
+		paveSurface(world, random, x, z, ground, false);
 		return 0;
 	}
 
 	// lane deck on a polished-andesite foundation: black lanes, white edge
-	// lines + centre dashes; railings raised one block (on two andesite blocks
+	// lines + centre dashes; railings raised one block (two andesite blocks
 	// below, aligned with the foundation); no weeds outside the railings
-	private static void paveSurface(World world, Random random, int x, int z, int y, boolean tunnel, boolean alongX)
+	private static void paveSurface(World world, Random random, int x, int z, int y, boolean tunnel)
 	{
 		// polished-andesite foundation under the whole deck
 		for (int dx = -5; dx <= 5; dx++)
-		{
-			int px = alongX ? x : x + dx;
-			int pz = alongX ? z + dx : z;
-			world.setBlockState(new BlockPos(px, y - 1, pz), Blocks.STONE.getStateFromMeta(6));
-		}
+			world.setBlockState(new BlockPos(x + dx, y - 1, z), Blocks.STONE.getStateFromMeta(6));
 		for (int dx = -5; dx <= 5; dx++)
 		{
 			int lane = Math.abs(dx);
@@ -205,32 +157,30 @@ public class RoadGenerator
 				white = random.nextInt(3) < 2;        // centre dashes
 			else
 				white = false;                        // black lane
-			int px = alongX ? x : x + dx;
-			int pz = alongX ? z + dx : z;
+			int px = x + dx;
 			if (white)
-				setRoad(world, px, y, pz, 0);
+				setRoad(world, px, y, z, 0);
 			else if (!tunnel && random.nextInt(12) == 0) // pothole / weed patch
 			{
 				if (random.nextBoolean())
-					setWeeds(world, random, px, y + 1, pz);
+					setWeeds(world, random, px, y + 1, z);
 				else
-					world.setBlockToAir(new BlockPos(px, y, pz));
+					world.setBlockToAir(new BlockPos(px, y, z));
 			}
 			else
-				setRoad(world, px, y, pz, 15);
+				setRoad(world, px, y, z, 15);
 		}
 		if (tunnel)
 			return;
 		// railings raised one block, two andesite blocks underneath; no outer weeds
 		for (int sx = -6; sx <= 6; sx += 12)
 		{
-			int px = alongX ? x : x + sx;
-			int pz = alongX ? z + sx : z;
-			world.setBlockState(new BlockPos(px, y - 1, pz), Blocks.STONE.getStateFromMeta(6));
+			int px = x + sx;
+			world.setBlockState(new BlockPos(px, y - 1, z), Blocks.STONE.getStateFromMeta(6));
 			if (random.nextInt(8) != 0)
 			{
-				world.setBlockState(new BlockPos(px, y, pz), Blocks.STONE.getStateFromMeta(6));
-				world.setBlockState(new BlockPos(px, y + 1, pz), Blocks.IRON_BARS.getDefaultState());
+				world.setBlockState(new BlockPos(px, y, z), Blocks.STONE.getStateFromMeta(6));
+				world.setBlockState(new BlockPos(px, y + 1, z), Blocks.IRON_BARS.getDefaultState());
 			}
 		}
 	}
