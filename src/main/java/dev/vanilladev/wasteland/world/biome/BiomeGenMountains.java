@@ -3,7 +3,7 @@ package dev.vanilladev.wasteland.world.biome;
 import net.minecraft.world.biome.Biome;
 import net.minecraft.world.biome.Biome.BiomeProperties;
 import dev.vanilladev.wasteland.ModConfig;
-import dev.vanilladev.wasteland.entity.EntityDayZombie;
+import net.minecraft.entity.monster.EntityZombie;
 
 public class BiomeGenMountains extends BiomeGenWastelandBase
 {
@@ -14,7 +14,7 @@ public class BiomeGenMountains extends BiomeGenWastelandBase
 		//this.theBiomeDecorator = new BiomeDecoratorWasteland();
 		if (ModConfig.dayZombies)
 		{
-			this.spawnableMonsterList.add(new Biome.SpawnListEntry(EntityDayZombie.class, 10, 0, 2)); // weight, maxG, minG
+			this.spawnableMonsterList.add(new Biome.SpawnListEntry(EntityZombie.class, 10, 0, 2)); // weight, maxG, minG
 		}
 	}
 }

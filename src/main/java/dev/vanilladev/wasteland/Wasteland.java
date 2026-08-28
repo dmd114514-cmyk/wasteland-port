@@ -16,7 +16,6 @@ import net.minecraftforge.fml.common.event.FMLPreInitializationEvent;
 import net.minecraftforge.fml.common.event.FMLServerStartingEvent;
 import net.minecraftforge.fml.common.registry.EntityRegistry;
 import dev.vanilladev.wasteland.city.CityGenerator;
-import dev.vanilladev.wasteland.entity.EntityDayZombie;
 import dev.vanilladev.wasteland.ruin.RuinVillageGenerator;
 import dev.vanilladev.wasteland.world.WastelandWorldData;
 import dev.vanilladev.wasteland.world.WorldTypeWasteland;
@@ -48,8 +47,6 @@ public class Wasteland
 		
 		ModConfig.load(config);
 		RuinConfig.load(ruinConfig);
-		
-		EntityRegistry.registerModEntity(new ResourceLocation(ModHelper.ModInfo.modid, "dayzombie"), EntityDayZombie.class, "Day Zombie", 0, Wasteland.instance, 128, 1, true);
 		
 		proxy.preInit();
 		

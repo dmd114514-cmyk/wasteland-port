@@ -34,13 +34,22 @@ minecraft {
     }
 }
 
+repositories {
+    mavenCentral()
+}
+
 dependencies {
     minecraft 'net.minecraftforge:forge:1.12.2-14.23.5.2864'
+    // mixin annotations + IEarlyMixinLoader come from mixinbooter (compile-only;
+    // it must be present in mods/ at runtime)
+    compileOnly files('libs/mixinbooter-11.10.jar')
 }
 
 jar {
     manifest {
         attributes([
+            "FMLCorePlugin": "dev.vanilladev.wasteland.core.WastelandCorePlugin",
+            "FMLCorePluginContainsFMLMod": "true",
             "Specification-Title": "wasteland",
             "Specification-Vendor": "vanillaDev",
             "Specification-Version": "1.0.0",

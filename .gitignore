@@ -1,4 +1,4 @@
-﻿.gradle/
+.gradle/
 build/
 run/
 out/
@@ -11,3 +11,5 @@ logs/
 
 # internal development notes - not published
 DEVELOPMENT.md
+# third-party compile-only libs (place mixinbooter-11.10.jar here for builds)
+libs/
