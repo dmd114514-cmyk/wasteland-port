@@ -27,10 +27,15 @@ public class RuinedCity
 	private static final int BLOCK_W = 18;   // city block side length
 	private static final int CYCLE = 24;     // block + street period
 	private static final int SUB_W = 9;      // block sub-cell side (BLOCK_W / 2)
-	// HBM CE linkage: NTM civilian house (9x4) and large office (14x5),
-	// generated reflectively when the HBM mod is loaded
-	private static final int HBM_HOUSE = 1000;
-	private static final int HBM_OFFICE = 1001;
+	// HBM CE linkage: NTM civilian houses/labs/offices (9-15 wide), generated
+	// reflectively when the HBM mod is loaded; at most 3 of each per city
+	private static final int HBM_HOUSE = 1000;    // CivilianFeatures$NTMHouse1 (9x4)
+	private static final int HBM_LAB1 = 1001;     // CivilianFeatures$NTMLab1 (9x4)
+	private static final int HBM_OFFICE = 1002;   // OfficeFeatures$LargeOffice (14x5)
+	private static final int HBM_OFFICE_C = 1003; // OfficeFeatures$LargeOfficeCorner (11x15)
+	private static final int HBM_HOUSE2 = 1004;   // CivilianFeatures$NTMHouse2 (15x5)
+	private static final int HBM_LAB2 = 1005;     // CivilianFeatures$NTMLab2 (12x11)
+	private static final int HBM_RURAL = 1006;    // CivilianFeatures$RuralHouse1 (14x8)
 	private static final boolean HBM = Loader.isModLoaded("hbm");
 
 	private final Vector center;
@@ -39,6 +44,8 @@ public class RuinedCity
 	private final WorldGenRandomRubble rubble = new WorldGenRandomRubble();
 	// footprints taken by buildings (inflated by 1 block for spacing)
 	private final java.util.HashSet<Long> occupied = new java.util.HashSet<Long>();
+	// HBM per-type counter so no linked building repeats more than 3 times
+	private final int[] hbmCount = new int[7];
 	// temp diagnostics (removed for release)
 	private int blocksSeen, biomeFail, groundFail, createFail, placedBuildings, hbmBuildings;
 
@@ -55,6 +62,9 @@ public class RuinedCity
 		int core = 3 * CYCLE; // 6x6 city blocks
 		int extent = core + STREET_W;
 		System.out.println("City gen: center biome " + world.getBiome(new BlockPos(center.X, 0, center.Z)).getRegistryName() + " core " + core);
+		// the whole city footprint becomes one big plain first, so streets and
+		// buildings always sit on the same plane (no riverbed dips, no floats)
+		flattenCity(world, center.X - extent, center.X + extent, center.Z - extent, center.Z + extent);
 		fillStreets(world, random, center.X - extent, center.X + extent, center.Z - extent, center.Z + extent);
 		placeBlocks(world, random, center.X - core - STREET_W, center.X + core, center.Z - core - STREET_W, center.Z + core);
 		System.out.println("City gen done: blocks=" + this.blocksSeen + " biomeFail=" + this.biomeFail + " groundFail=" + this.groundFail + " createFail=" + this.createFail + " buildings=" + this.placedBuildings + " hbm=" + this.hbmBuildings + " hbmLoaded=" + HBM);
@@ -72,6 +82,40 @@ public class RuinedCity
 		// otherwise streets/buildings are skipped while the core chunks are new
 		int h = world.getChunkFromBlockCoords(new BlockPos(x, 0, z)).getHeightValue(x & 15, z & 15);
 		return (h > 0) ? h : 0;
+	}
+
+	// flatten the whole city footprint into one big plain at the center's
+	// ground level: high ground is cut, dips (dry riverbeds) are filled, and
+	// the surface is re-laid so streets and buildings sit on the same plane
+	private void flattenCity(World world, int minX, int maxX, int minZ, int maxZ)
+	{
+		int base = groundY(world, center.X, center.Z);
+		if (base <= 0)
+			base = 64;
+		System.out.println("City flatten: base=" + base);
+		for (int x = minX; x <= maxX; x++)
+		{
+			for (int z = minZ; z <= maxZ; z++)
+			{
+				int gy = groundY(world, x, z);
+				if (gy <= 0)
+					continue;
+				if (gy > base)
+				{
+					// cut the high ground down to the plain level
+					for (int y = base; y < gy; y++)
+						world.setBlockToAir(new BlockPos(x, y, z));
+				}
+				else if (gy < base)
+				{
+					// fill the dips up to the plain level
+					for (int y = gy; y < base; y++)
+						world.setBlockState(new BlockPos(x, y, z), Blocks.DIRT.getDefaultState());
+				}
+				// uniform surface so streets/buildings have the same ground
+				world.setBlockState(new BlockPos(x, base - 1, z), ModConfig.getSurfaceBlock().getDefaultState());
+			}
+		}
 	}
 
 	// street surface patches + street lamps
@@ -155,7 +199,7 @@ public class RuinedCity
 	// touch an already-placed building are skipped (nothing overlaps or sticks).
 	private boolean placeBuilding(World world, Random random, int type, int x, int z, boolean groundSnap)
 	{
-		if (type == HBM_HOUSE || type == HBM_OFFICE)
+		if (type >= HBM_HOUSE && type <= HBM_RURAL)
 			return placeHbmBuilding(world, random, type, x, z, groundSnap);
 		Building b = Building.create(type);
 		if (b == null)
@@ -362,34 +406,80 @@ public class RuinedCity
 		}
 	}
 
-	// small pool fits 7-wide sub-cells (no 9-wide or wider buildings)
+	// small pool fits 9-wide sub-cells: sand houses are weighted down so the
+	// city does not look like one big sandstone carpet (houses 2/8, stands,
+	// wells and small farms 2/8 each)
 	private int pickSmall(Random random)
 	{
-		// HBM linkage: 1/4 of the small slots become an NTM civilian house
 		if (HBM && random.nextInt(4) == 0)
-			return HBM_HOUSE;
-		int[] small = { Building.S_HOUSE1, Building.S_HOUSE2, Building.STAND, Building.WELL };
+		{
+			int t = hbmSmallAvail(random);
+			if (t >= 0)
+				return t;
+		}
+		int[] small = { Building.S_HOUSE1, Building.S_HOUSE2, Building.STAND, Building.WELL,
+				Building.S_FARM, Building.S_FARM, Building.STAND, Building.WELL };
 		return small[random.nextInt(small.length)];
 	}
 
-	// mid pool: same 7-wide limit, used by the central block's sub-cells
+	// mid pool (central block sub-cells): same small set
 	private int pickMid(Random random)
 	{
 		if (HBM && random.nextInt(4) == 0)
-			return HBM_HOUSE;
-		int[] mid = { Building.S_HOUSE1, Building.S_HOUSE2, Building.STAND, Building.WELL };
+		{
+			int t = hbmSmallAvail(random);
+			if (t >= 0)
+				return t;
+		}
+		int[] mid = { Building.S_HOUSE1, Building.S_HOUSE2, Building.STAND, Building.WELL,
+				Building.S_FARM, Building.S_FARM, Building.STAND, Building.WELL };
 		return mid[random.nextInt(mid.length)];
 	}
 
-	// large pool for 15% normal blocks: ruins + church + clock tower
-	// (hospital stays exclusive to the central plaza; 24 wide does not fit
-	// a normal 18-wide block); HBM office joins the pool when HBM is loaded
+	// one HBM small building (9x4 civilian house / lab) that is not at its
+	// per-type cap of 3 yet, or -1 when none is available
+	private int hbmSmallAvail(Random random)
+	{
+		java.util.List<Integer> a = new java.util.ArrayList<Integer>();
+		if (hbmCount[0] < 3)
+			a.add(HBM_HOUSE);
+		if (hbmCount[1] < 3)
+			a.add(HBM_LAB1);
+		return a.isEmpty() ? -1 : a.get(random.nextInt(a.size()));
+	}
+
+	// large pool for 15% normal blocks: ruins, church, clock tower, farms and
+	// mid houses (hospital stays exclusive to the central plaza); HBM offices,
+	// labs and houses join the pool when the HBM mod is loaded
 	private int pickLarge(Random random)
 	{
 		if (HBM && random.nextInt(4) == 0)
-			return HBM_OFFICE;
+		{
+			int t = hbmLargeAvail(random);
+			if (t >= 0)
+				return t;
+		}
 		int[] large = { Building.L_HOUSE1, Building.L_HOUSE2, Building.LIBRARY, Building.DINER,
-				Building.CHURCH, Building.CLOCK_TOWER };
+				Building.CHURCH, Building.CLOCK_TOWER, Building.L_FARM,
+				Building.M_HOUSE1, Building.M_HOUSE2 };
 		return large[random.nextInt(large.length)];
+	}
+
+	// one HBM large building (office / corner office / house2 / lab2 / rural
+	// house) that is not at its per-type cap of 3 yet, or -1 when none is
+	private int hbmLargeAvail(Random random)
+	{
+		java.util.List<Integer> a = new java.util.ArrayList<Integer>();
+		if (hbmCount[2] < 3)
+			a.add(HBM_OFFICE);
+		if (hbmCount[3] < 3)
+			a.add(HBM_OFFICE_C);
+		if (hbmCount[4] < 3)
+			a.add(HBM_HOUSE2);
+		if (hbmCount[5] < 3)
+			a.add(HBM_LAB2);
+		if (hbmCount[6] < 3)
+			a.add(HBM_RURAL);
+		return a.isEmpty() ? -1 : a.get(random.nextInt(a.size()));
 	}
 }

@@ -434,6 +434,32 @@ gradlew.bat build          :: 编译 + reobf，产出 build/libs/wasteland-1.0.0
    mixinbooter）：`City gen done: buildings=73 hbm=13 hbmLoaded=true`
    —— 13 栋 HBM 民房/办公室成功生成，无 skip 异常。无 HBM 时行为不变
    （`buildings=61`、无异常、地堡 `Y:62`）。
+
+### 第十轮：城市大平原 + 建筑多样化 + 联动上限（2026-08-28）
+
+用户两点：城市别再落在干涸河床的凹陷里（干脆把 city 群系做成大平原），
+建筑种类要更随机（联动模组 + 原版），联动模组每种建筑每城最多出现 3 次。
+
+1. **两大平原化**：
+   - `BiomeGenCity.genTerrainBlocks` override：city 群系铺成固定大平原
+     （石头柱到 y=61、62 填充、63 草地）—— 群系区天然是平地。
+   - `RuinedCity.flattenCity`：城市生成前把整个地块（6×6 街区范围）以
+     中心地面为基准整平（高处削平、低处垫高、地表统一重铺）→ 街道与
+     建筑永远在同一平面，无干涸河床坑、无浮空。冒烟 `City flatten: base=64`。
+2. **建筑种类随机化**：
+   - 小池（子块 9）：砂岩小屋权重降到 25%（小屋/帐篷/水井/小农场
+     S_FARM 各 2/8）—— 不再"一片砂岩"。
+   - 大池（15% 街区）：加入 **L_FARM、M_HOUSE1、M_HOUSE2**（Library/
+     Diner/教堂/钟楼/大屋原池保留）→ 9 种。
+3. **HBM 联动扩展（7 类 + 每类 ≤3）**：民房系 NTMHouse1/NTMLab1（9×4
+   小池）+ NTMHouse2（15×5）、NTMLab2（12×11）、RuralHouse1（14×8）
+   与办公室系 LargeOffice（14×5）、LargeOfficeCorner（11×15）进大池；
+   `hbmCount[7]` 每类计数，达 3 后该类型不再入池（hbmSmallAvail/
+   hbmLargeAvail 只从未满类型里选）。冒烟 `buildings=61 hbm=7
+   hbmLoaded=true`（无 skip 异常，地堡 Y:62）。
+- 修复：`BiomeGenCity` 误用 1.7 的 `setBlock`（编译失败）→ 1.12.2
+  用 `primer.setBlockState`。
+- 交付：`build/libs/wasteland-1.0.0.jar`（241,164 B，备份 `.bak-20260828-12`）。
 - 红线核对：HBM 建筑由 HBM 组件生成（未改 HBM 源码），城市机制层调用；
   我方代码仍 MIT，HBM 建筑属 HBM 模组。
 - 交付：`build/libs/wasteland-1.0.0.jar`（239,739 B，备份 `.bak-20260828-10`）。
