@@ -1,18 +1,27 @@
 package dev.vanilladev.wasteland.core;
 
+import net.minecraftforge.common.ForgeVersion;
 import net.minecraftforge.fml.relauncher.IFMLLoadingPlugin;
-import zone.rong.mixinbooter.IEarlyMixinLoader;
+import org.spongepowered.asm.launch.MixinBootstrap;
+import org.spongepowered.asm.mixin.Mixins;
 
-import java.util.Arrays;
-import java.util.List;
 import java.util.Map;
 
-@IFMLLoadingPlugin.MCVersion("1.12.2")
-@IFMLLoadingPlugin.TransformerExclusions({"dev.vanilladev.wasteland.core", "dev.vanilladev.wasteland.mixin"})
-public class WastelandCorePlugin implements IFMLLoadingPlugin, IEarlyMixinLoader
+// Coremod registers the mixin config directly (same pattern as the
+// Sun-Proof-Zombies mod): MixinBootstrap.init() + Mixins.addConfiguration()
+// in the constructor; method names inside the mixin use mcp names and are
+// dynamically remapped at runtime.
+@IFMLLoadingPlugin.MCVersion(ForgeVersion.mcVersion)
+public class WastelandCorePlugin implements IFMLLoadingPlugin
 {
+	public WastelandCorePlugin()
+	{
+		MixinBootstrap.init();
+		Mixins.addConfiguration("mixins.wasteland.json");
+	}
+
 	@Override
-	public String[] getASMTransformerClass() { return null; }
+	public String[] getASMTransformerClass() { return new String[0]; }
 
 	@Override
 	public String getModContainerClass() { return null; }
@@ -25,10 +34,4 @@ public class WastelandCorePlugin implements IFMLLoadingPlugin, IEarlyMixinLoader
 
 	@Override
 	public String getAccessTransformerClass() { return null; }
-
-	@Override
-	public List<String> getMixinConfigs()
-	{
-		return Arrays.asList("mixins.wasteland.json");
-	}
 }
