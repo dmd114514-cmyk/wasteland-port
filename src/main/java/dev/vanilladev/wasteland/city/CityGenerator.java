@@ -67,8 +67,6 @@ public class CityGenerator implements IWorldGenerator
 			chunks.add(currentLoc);
 			addConnectedBiomeChunks(chunks, currentLoc, world);
 			Vector center = getCenterChunk(chunks, world);
-			// cities sit beside the world main highway, outside the city plain
-			center = RoadGenerator.alignCity(world, center, random);
 			
 			
 			if (chunks.size() > 8)
