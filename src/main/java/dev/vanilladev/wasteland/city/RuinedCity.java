@@ -58,6 +58,7 @@ public class RuinedCity
 
 	public void generate(World world, Random random) 
 	{
+		RoadGenerator.registerCity(new BlockPos(center.X, 0, center.Z));
 		// city is built around the center only; a bounded core keeps worldgen
 		// cascading loads finite instead of storming over the whole biome patch
 		int core = 3 * CYCLE; // 6x6 city blocks
@@ -67,6 +68,7 @@ public class RuinedCity
 		// buildings always sit on the same plane (no riverbed dips, no floats)
 		flattenCity(world, center.X - extent, center.X + extent, center.Z - extent, center.Z + extent);
 		fillStreets(world, random, center.X - extent, center.X + extent, center.Z - extent, center.Z + extent);
+		RoadGenerator.generate(world, random, new BlockPos(center.X, 0, center.Z));
 		placeBlocks(world, random, center.X - core - STREET_W, center.X + core, center.Z - core - STREET_W, center.Z + core);
 		System.out.println("City gen done: blocks=" + this.blocksSeen + " biomeFail=" + this.biomeFail + " groundFail=" + this.groundFail + " createFail=" + this.createFail + " buildings=" + this.placedBuildings + " hbm=" + this.hbmBuildings + " hbmLoaded=" + HBM);
 	}
@@ -239,6 +241,16 @@ public class RuinedCity
 					return false;
 			}
 		}
+		// roads: no building within 3 blocks of a road surface (black/white concrete)
+		for (int px = x0 - 3; px < x0 + w + 3; px++)
+		{
+			for (int pz = z0 - 3; pz < z0 + l + 3; pz++)
+			{
+				int gy = groundY(world, px, pz) - 1;
+				if (gy > 0 && world.getBlockState(new BlockPos(px, gy, pz)).getBlock() == Blocks.CONCRETE)
+					return false;
+			}
+		}
 		// highest ground under the footprint (with margin) - foundation level
 		int maxY = 0;
 		for (int px = x0 - 1; px < x0 + w + 1; px++)
@@ -322,6 +334,16 @@ public class RuinedCity
 					return false;
 			}
 		}
+		// roads: no building within 3 blocks of a road surface (black/white concrete)
+		for (int px = x0 - 3; px < x0 + w + 3; px++)
+		{
+			for (int pz = z0 - 3; pz < z0 + l + 3; pz++)
+			{
+				int gy = groundY(world, px, pz) - 1;
+				if (gy > 0 && world.getBlockState(new BlockPos(px, gy, pz)).getBlock() == Blocks.CONCRETE)
+					return false;
+			}
+		}
 		// highest ground under the footprint - foundation levels to it
 		int maxY = 0;
 		for (int px = x0 - 1; px < x0 + w + 1; px++)
@@ -359,10 +381,10 @@ public class RuinedCity
 			Class<?> c = Class.forName(cls);
 			if (type == HBM_RUIN1)
 			{
-				// Ruin001 is a plain WorldGenerator: no-arg ctor, generate(World,Random,BlockPos)
+				// Ruin001 is a plain WorldGenerator: no-arg ctor, generate = func_180709_b (srg)
 				Object gen = c.getConstructor().newInstance();
-				gen.getClass().getMethod("generate", World.class, Random.class,
-						BlockPos.class).invoke(gen, world, random, new BlockPos(x0, maxY - 1, z0));
+				gen.getClass().getMethod("func_180709_b", World.class, Random.class,
+						BlockPos.class).invoke(gen, world, random, new BlockPos(x0, maxY, z0));
 			}
 			else
 			{
