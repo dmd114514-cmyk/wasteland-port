@@ -29,8 +29,8 @@ public class RoadGenerator
 	private static final int DECK_Y = 64;          // fixed deck height (zero relief)
 	private static final int TUNNEL_H = 4;         // wall height above the deck
 	private static final int BROKEN_TAIL = 30;     // broken-off length at each road end
-	private static final int AXIS_X = 0;           // segment runs along X (lane is Z)
-	private static final int AXIS_Z = 1;           // segment runs along Z (lane is X)
+	public static final int AXIS_X = 0;           // segment runs along X (lane is Z)
+	public static final int AXIS_Z = 1;           // segment runs along Z (lane is X)
 
 	// main road segments (axis, lane, a0, a1); defined once by ensure()
 	private static final List<int[]> mainSegs = new ArrayList<int[]>();
@@ -39,6 +39,15 @@ public class RoadGenerator
 	private static int cols, bridges, tunnels, pillarSets, nextReport = 512;
 	// chunks already paved (idempotent: pre-warming + populate must not double-count)
 	private static final java.util.HashSet<Long> pavedChunks = new java.util.HashSet<Long>();
+	// whole-road pass already ran (every city calls paveMainRoad; the first one
+	// does the full work and lays the roadside cities - later calls no-op)
+	private static boolean roadPaved;
+	// polyline segments for outside queries (RoadSide waypoint cities / single
+	// roadside buildings)
+	public static List<int[]> segments()
+	{
+		return mainSegs;
+	}
 
 	// is (x,z) on/near the main road polyline? margin extends the corridor
 	// beyond the deck (deck is 11 wide, railings at +-6); used by city
@@ -101,7 +110,7 @@ public class RoadGenerator
 	// not guaranteed to run populate, so the road must not depend on it.
 	public static void paveMainRoad(World world, Random random)
 	{
-		if (!ModConfig.enableMainRoad || !mainDefined)
+		if (!ModConfig.enableMainRoad || !mainDefined || roadPaved)
 			return;
 		for (int[] s : mainSegs)
 		{
@@ -117,6 +126,11 @@ public class RoadGenerator
 		}
 		System.out.println("Road paved total: cols=" + cols + " bridge=" + bridges
 				+ " tunnel=" + tunnels + " pillarSets=" + pillarSets);
+		roadPaved = true;
+		// roadside features: cities on -> guaranteed waypoint cities along the
+		// whole road (5+); cities off -> scattered single buildings instead
+		if (ModConfig.spawnCities)
+			RoadSide.placeRoadCities(world, random);
 	}
 
 	// per-chunk paving hook from ChunkProviderWasteland.populate: paves this
@@ -170,7 +184,13 @@ public class RoadGenerator
 			}
 		}
 		if (any)
+		{
 			report();
+			// scatter a few single ruins beside this chunk's road stretch
+			// (with or without cities; waypoint cities are avoided inside
+			// RoadSide so nothing is dropped on a city plain)
+			RoadSide.placeRoadBuildings(world, random, cx, cz);
+		}
 	}
 
 	// broken-end distance: 0..BROKEN_TAIL-1 near the road start (segment 0) or
