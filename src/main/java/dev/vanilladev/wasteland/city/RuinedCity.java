@@ -255,15 +255,27 @@ public class RuinedCity
 					return false;
 			}
 		}
-		// highest ground under the footprint (with margin) - foundation level
-		int maxY = 0;
+		// foundation level = the most common ground under the footprint (with
+		// margin): the flat city plain dominates, so buildings sit on it - the
+		// old "highest ground" rule lifted edge buildings onto blend-band bumps
+		// (gravel-filled plinths)
+		int[] hist = new int[257];
 		for (int px = x0 - 1; px < x0 + w + 1; px++)
 		{
 			for (int pz = z0 - 1; pz < z0 + l + 1; pz++)
 			{
 				int gy = groundY(world, px, pz);
-				if (gy > maxY)
-					maxY = gy;
+				if (gy > 0 && gy < 257)
+					hist[gy]++;
+			}
+		}
+		int maxY = 0, best = -1;
+		for (int y = 1; y < 257; y++)
+		{
+			if (hist[y] > best)
+			{
+				best = hist[y];
+				maxY = y;
 			}
 		}
 		if (maxY <= 0)
@@ -348,15 +360,25 @@ public class RuinedCity
 					return false;
 			}
 		}
-		// highest ground under the footprint - foundation levels to it
-		int maxY = 0;
+		// foundation level = the most common ground under the footprint (the
+		// flat city plain), so HBM buildings never perch on blend-band bumps
+		int[] hist = new int[257];
 		for (int px = x0 - 1; px < x0 + w + 1; px++)
 		{
 			for (int pz = z0 - 1; pz < z0 + l + 1; pz++)
 			{
 				int gy = groundY(world, px, pz);
-				if (gy > maxY)
-					maxY = gy;
+				if (gy > 0 && gy < 257)
+					hist[gy]++;
+			}
+		}
+		int maxY = 0, best = -1;
+		for (int y = 1; y < 257; y++)
+		{
+			if (hist[y] > best)
+			{
+				best = hist[y];
+				maxY = y;
 			}
 		}
 		if (maxY <= 0)

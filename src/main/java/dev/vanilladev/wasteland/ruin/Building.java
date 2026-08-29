@@ -191,26 +191,9 @@ public class Building {
 				{
 					for (short i = 0; i < this.width; i++)
 					{
-						if (rot == 0)
-						{
-							x = i;
-							z = k;
-						}
-						else if (rot == 1)
-						{
-							x = this.width - i - 1;
-							z = k;
-						}
-						else if (rot == 2)
-						{
-							x = this.width - i - 1;
-							z = this.width - k - 1;
-						}
-						else
-						{
-							x = i;
-							z = this.width - k - 1;
-						}
+						int[] o = rotationOff(this.width, i, k, rot);
+						x = o[0];
+						z = o[1];
 						if (blocks[count] == 7)
 						{
 							this.genHelper.setBlock(pos.X+x, pos.Y+j, pos.Z+z, ModConfig.getSurfaceBlock());
@@ -228,7 +211,37 @@ public class Building {
 						}
 						else
 						{
-							this.genHelper.setBlock(pos.X+x, pos.Y+j, pos.Z+z, Block.getBlockById(this.blocks[count]), this.data[count]);
+							int bid = this.blocks[count];
+							Block b = Block.getBlockById(bid);
+							this.genHelper.setBlock(pos.X+x, pos.Y+j, pos.Z+z, b, this.data[count]);
+							// door (64-71) is a two-cell block in Minecraft - the code
+							// stores only the lower half; complete the upper half on an
+							// air cell above so doors are never half-cut
+							if (bid >= 64 && bid <= 71)
+							{
+								int upIdx = count + this.width * this.length;
+								if (j + 1 < this.height && upIdx < this.blocks.length
+										&& (this.blocks[upIdx] == 0 || this.blocks[upIdx] == 2))
+									this.genHelper.setBlock(pos.X+x, pos.Y+j+1, pos.Z+z, b, this.data[count] | 8);
+							}
+							// bed (26) is a two-cell block (head + foot) - place the
+							// partner cell toward the facing when that cell is free
+							else if (bid == 26)
+							{
+								int f = this.data[count] & 3; // 0=S 1=W 2=N 3=E
+								int hxi = i + (f == 1 ? -1 : (f == 3 ? 1 : 0));
+								int hzi = k + (f == 0 ? 1 : (f == 2 ? -1 : 0));
+								if (hxi >= 0 && hxi < this.width && hzi >= 0 && hzi < this.length)
+								{
+									int hidx = count + (hxi - i) + (hzi - k) * this.width;
+									if (hidx >= 0 && hidx < this.blocks.length
+											&& (this.blocks[hidx] == 0 || this.blocks[hidx] == 2))
+									{
+										int[] ho = rotationOff(this.width, hxi, hzi, rot);
+										this.genHelper.setBlock(pos.X+ho[0], pos.Y+j, pos.Z+ho[1], b, this.data[count] | 8);
+									}
+								}
+							}
 						}
 						count++;
 					}
@@ -238,6 +251,18 @@ public class Building {
 			return true;
 	}
 	
+	// blueprint rotation: same mapping as the main build loop (square w x l)
+	private static int[] rotationOff(int w, int i, int k, int rot)
+	{
+		if (rot == 1)
+			return new int[]{ w - i - 1, k };
+		if (rot == 2)
+			return new int[]{ w - i - 1, w - k - 1 };
+		if (rot == 3)
+			return new int[]{ i, w - k - 1 };
+		return new int[]{ i, k };
+	}
+
 	private LootStack setItems(Random random) 
 	{
 		if (random.nextInt(RuinConfig.hardLootChance) == 0)
