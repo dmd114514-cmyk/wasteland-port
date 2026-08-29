@@ -107,6 +107,10 @@ public class RuinedCity
 		{
 			for (int z = minZ - blend; z <= maxZ + blend; z++)
 			{
+				// the world highway keeps its own deck through the city plain
+				// (when enabled): flattening must not eat the road surface
+				if (ModConfig.enableMainRoad && RoadGenerator.onMainRoad(x, z, 0))
+					continue;
 				int gy = groundY(world, x, z);
 				if (gy <= 0)
 					continue;

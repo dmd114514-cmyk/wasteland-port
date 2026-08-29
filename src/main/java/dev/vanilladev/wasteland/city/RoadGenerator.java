@@ -7,6 +7,7 @@ import java.util.Random;
 import net.minecraft.init.Blocks;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
+import dev.vanilladev.wasteland.ModConfig;
 
 // World main highway: one long polyline (10000+ blocks) that is allowed to
 // turn - 3 axis-aligned segments (X -> Z -> X or Z -> X -> Z) chained at two
@@ -39,10 +40,39 @@ public class RoadGenerator
 	// chunks already paved (idempotent: pre-warming + populate must not double-count)
 	private static final java.util.HashSet<Long> pavedChunks = new java.util.HashSet<Long>();
 
+	// is (x,z) on/near the main road polyline? margin extends the corridor
+	// beyond the deck (deck is 11 wide, railings at +-6); used by city
+	// generation to keep cities off the highway. Always false when the road
+	// is disabled (nothing is ever defined then).
+	public static boolean onMainRoad(int x, int z, int margin)
+	{
+		if (!mainDefined)
+			return false;
+		int m = margin + 6;
+		for (int i = 0; i < mainSegs.size(); i++)
+		{
+			int[] s = mainSegs.get(i);
+			int axis = s[0], lane = s[1], a0 = s[2], a1 = s[3];
+			if (axis == AXIS_X)
+			{
+				if (Math.abs(z - lane) <= m && x >= a0 - m && x <= a1 + m)
+					return true;
+			}
+			else
+			{
+				if (Math.abs(x - lane) <= m && z >= a0 - m && z <= a1 + m)
+					return true;
+			}
+		}
+		return false;
+	}
+
 	public static void ensure(World world, Random random)
 	{
 		if (mainDefined)
 			return;
+		if (!ModConfig.enableMainRoad)
+			return; // highway disabled: no polyline is defined at all
 		mainDefined = true;
 		boolean mainX = random.nextBoolean();          // first segment along X or Z
 		int turn = -MAIN_LEN / 2 + random.nextInt(MAIN_LEN / 2 + 1); // turn axis coord
@@ -71,7 +101,7 @@ public class RoadGenerator
 	// not guaranteed to run populate, so the road must not depend on it.
 	public static void paveMainRoad(World world, Random random)
 	{
-		if (!mainDefined)
+		if (!ModConfig.enableMainRoad || !mainDefined)
 			return;
 		for (int[] s : mainSegs)
 		{
@@ -93,6 +123,8 @@ public class RoadGenerator
 	// chunk's part of every segment that crosses it; counters accumulate
 	public static void paveChunk(World world, Random random, int cx, int cz)
 	{
+		if (!ModConfig.enableMainRoad)
+			return; // highway off: nothing to pave per chunk
 		ensure(world, random);
 		long key = ((long) cx << 32) | (cz & 0xFFFFFFFFL);
 		if (!pavedChunks.add(key))
