@@ -36,6 +36,7 @@ import net.minecraftforge.event.terraingen.InitMapGenEvent.EventType;
 import net.minecraftforge.event.terraingen.InitNoiseGensEvent.ContextOverworld;
 import net.minecraftforge.event.terraingen.TerrainGen;
 import dev.vanilladev.wasteland.WastelandBiomes;
+import dev.vanilladev.wasteland.city.RoadGenerator;
 
 public class ChunkProviderWasteland implements IChunkGenerator
 {
@@ -382,6 +383,8 @@ public class ChunkProviderWasteland implements IChunkGenerator
 		long k = this.rand.nextLong() / 2L * 2L + 1L;
 		long l = this.rand.nextLong() / 2L * 2L + 1L;
 		this.rand.setSeed((long)x * k + (long)z * l ^ this.worldObj.getSeed());
+		// world main highway: pave this chunk's part of every segment it crosses
+		RoadGenerator.paveChunk(this.worldObj, this.rand, x, z);
 		boolean flag = false;
 		ChunkPos chunkpos = new ChunkPos(x, z);
 		ForgeEventFactory.onChunkPopulate(true, this, this.worldObj, this.rand, x, z, flag);

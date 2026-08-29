@@ -58,7 +58,11 @@ public class RuinedCity
 
 	public void generate(World world, Random random) 
 	{
-		RoadGenerator.registerCity(new BlockPos(center.X, 0, center.Z));
+		// the world main highway is defined and paved end to end when the first
+		// city spawns; a city plain that sits on the road takes over its own
+		// section during flattening, so road and city never interfere
+		RoadGenerator.ensure(world, random);
+		RoadGenerator.paveMainRoad(world, random);
 		// city is built around the center only; a bounded core keeps worldgen
 		// cascading loads finite instead of storming over the whole biome patch
 		int core = 3 * CYCLE; // 6x6 city blocks
@@ -68,9 +72,7 @@ public class RuinedCity
 		// buildings always sit on the same plane (no riverbed dips, no floats)
 		flattenCity(world, center.X - extent, center.X + extent, center.Z - extent, center.Z + extent);
 		fillStreets(world, random, center.X - extent, center.X + extent, center.Z - extent, center.Z + extent);
-		// roads are laid before the buildings, lanes offset outside the city
-		// core; buildings then keep a 3-block margin from any road surface
-		RoadGenerator.generate(world, random, new BlockPos(center.X, 0, center.Z));
+		// buildings keep a 3-block margin from any road surface (cross-city too)
 		placeBlocks(world, random, center.X - core - STREET_W, center.X + core, center.Z - core - STREET_W, center.Z + core);
 		System.out.println("City gen done: blocks=" + this.blocksSeen + " biomeFail=" + this.biomeFail + " groundFail=" + this.groundFail + " createFail=" + this.createFail + " buildings=" + this.placedBuildings + " hbm=" + this.hbmBuildings + " hbmLoaded=" + HBM);
 	}
