@@ -28,9 +28,6 @@ public class ModConfig
 	public static boolean dayZombies;
 	public static boolean spawnCities;
 	public static int cityWeight;
-	// the world main highway is opt-in (default off): a 10000+ block tunnel /
-	// bridge road crossing the wastes; when off no road is ever laid
-	public static boolean enableMainRoad;
 	// cities stay at least this far from the world spawn: the scattered city
 	// biome used to put a city right next to 0,0 in every new world
 	public static int minCitySpawnDistance;
@@ -53,7 +50,6 @@ public class ModConfig
 		spawnBunker = config.get("Worldgen", "Spawn in underground bunker", true).getBoolean(true);
 		surfaceBlock = config.get("Worldgen", "The top block layer of the wasteland biome", "minecraft:dirt").getString();
 		spawnCities = config.get("Worldgen", "Enable cities", false).getBoolean(false); // default off: original release behavior; RuinedCity is an empty shell in the original
-		enableMainRoad = config.get("Worldgen", "Enable world main road", false).getBoolean(false); // opt-in: 10000+ block tunnel/bridge highway across the wastes
 		minCitySpawnDistance = config.get("Worldgen", "Min blocks from world spawn to a city", 3000).getInt(3000); // keep the spawn area wilderness; cities appear where you explore
 		cityWeight = config.get("Worldgen", "City biome weight", 150).getInt(150); // 10 = original rarity; higher = more city biomes
 		

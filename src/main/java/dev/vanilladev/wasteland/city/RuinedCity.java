@@ -58,11 +58,6 @@ public class RuinedCity
 
 	public void generate(World world, Random random) 
 	{
-		// the world main highway is defined and paved end to end when the first
-		// city spawns; a city plain that sits on the road takes over its own
-		// section during flattening, so road and city never interfere
-		RoadGenerator.ensure(world, random);
-		RoadGenerator.paveMainRoad(world, random);
 		// city is built around the center only; a bounded core keeps worldgen
 		// cascading loads finite instead of storming over the whole biome patch
 		int core = 3 * CYCLE; // 6x6 city blocks
@@ -107,10 +102,6 @@ public class RuinedCity
 		{
 			for (int z = minZ - blend; z <= maxZ + blend; z++)
 			{
-				// the world highway keeps its own deck through the city plain
-				// (when enabled): flattening must not eat the road surface
-				if (ModConfig.enableMainRoad && RoadGenerator.onMainRoad(x, z, 0))
-					continue;
 				int gy = groundY(world, x, z);
 				if (gy <= 0)
 					continue;

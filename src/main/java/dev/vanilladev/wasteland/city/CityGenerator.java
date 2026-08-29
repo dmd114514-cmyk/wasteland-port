@@ -94,38 +94,6 @@ public class CityGenerator implements IWorldGenerator
 						center.Z += dz >= 0 ? 512 : -512;
 				}
 				center.Y = getWorldHeight(world, center.X, center.Z);
-				// keep cities off the world highway (when enabled): shift the
-				// center clear of the road corridor so the road runs unbroken
-				// define the polyline first: the city biome patch may populate
-				// before any road chunk has, so without an explicit ensure the
-				// corridor query would always report "not on road" and cities
-				// would sit on it
-				if (ModConfig.enableMainRoad)
-					RoadGenerator.ensure(world, random);
-				boolean roadCorridor = RoadGenerator.onMainRoad(center.X, center.Z, 350);
-				System.out.println("City road check: X:" + center.X + " Z:" + center.Z + " corridor=" + roadCorridor + " enabled=" + ModConfig.enableMainRoad);
-				if (ModConfig.enableMainRoad && roadCorridor)
-				{
-					int[][] offs = { { 0, 384 }, { 0, -384 }, { 384, 0 }, { -384, 0 } };
-					boolean cleared = false;
-					for (int i = 0; i < offs.length; i++)
-					{
-						if (!RoadGenerator.onMainRoad(center.X + offs[i][0], center.Z + offs[i][1], 350))
-						{
-							center.X += offs[i][0];
-							center.Z += offs[i][1];
-							cleared = true;
-							break;
-						}
-					}
-					if (!cleared)
-					{
-						System.out.println("City debug: on main road, skipping center X:" + center.X + " Z:" + center.Z);
-						this.generating = false;
-						return;
-					}
-					center.Y = getWorldHeight(world, center.X, center.Z);
-				}
 				System.out.println("Generating City at X:" + String.valueOf(center.X) + " Z:" + String.valueOf(center.Z));
 				cityLocation.add(center);
 				cityNum++;
